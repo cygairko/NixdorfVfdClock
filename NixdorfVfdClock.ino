@@ -20,6 +20,7 @@ volatile unsigned long lastInt = 0;
 volatile unsigned long long currentBuf = 0;
 volatile byte bufCounter;
 bool invertedSignal = true;
+static byte pulseStart   = invertedSignal ? LOW : HIGH;
 
 // Button and Mosfet related
 const byte buttonPin = D8;
@@ -49,17 +50,6 @@ void setup () {
 }
 
 void loop() {
-  // // put your main code here, to run repeatedly:
-  // vfd.setCursor(4, 0);          // Moving cursor to 5 column in the first row
-  // // VFD.print("Hello world!");
-  // DateTime now = rtc.now();
-  // // DS1307_RTC.
-  // vfd.clear();
-  // vfd.print(now.year());
-  // // vfd.print(Week_days[now.dayOfTheWeek()]);
-  // Serial.println(__TIME__);
-  // delay(200);
-
   DateTime now = rtc.now();
 
   // loopTimeToSerialConsole(now);
@@ -128,14 +118,21 @@ void loopMosfet() {
   // read the state of the pushbutton value
   buttonState = digitalRead(buttonPin);
   // check if the pushbutton is pressed.
-  // if it is, the buttonState is HIGH
-  if (buttonState == HIGH || settingTime == 1) {
-    
-    // turn LED on
+  if (buttonState == HIGH) {
+    // Recognize button push
     settingTime = 1;
+    Serial.println("Setting time ... ");
+    
+    vfd.clear();
+    vfd.setCursor(0, 0);
+    vfd.print("Setting time ...");
+
+    delay(1500); // Show message for 1.5 s
+  } else if (settingTime == 1) {
+    // Keep display off while getting the time
     digitalWrite(mostfetPin, LOW);
   } else {
-    // turn LED off
+    // Turn button on again.
     digitalWrite(mostfetPin, HIGH);
   }
 }
@@ -146,7 +143,7 @@ void loopTimeToSerialConsole(DateTime now) {
   Serial.println(now.toString(dateFormat));
   Serial.println(now.toString(timeFormat));
   Serial.println();
-  }
+}
 
 void loopUpdateDisplay(DateTime now) {
   // char buf1[] = "DDD, MMM DD YYYY";
@@ -166,20 +163,12 @@ void loopUpdateDisplay(DateTime now) {
 // Code for reading DCF77 signal
 // **************************
 void IRAM_ATTR DCF77_ISR() {
+  // Interrupt handler
   unsigned int dur = 0;
   dur = millis() - lastInt;
+  byte sensorValue = digitalRead(dcfInterruptPin);
   
-  // Output for debugging
-  // Serial.print(!digitalRead(interruptPin));
-
-  int readDcf;
-  if (invertedSignal) {
-    readDcf = !digitalRead(dcfInterruptPin);
-  } else {
-    readDcf = digitalRead(dcfInterruptPin);
-  }
-  
-  if(readDcf) {
+  if(sensorValue == pulseStart) {
     if(dur>1500){
       if(bufCounter==59){
         evaluateSequence();
@@ -195,7 +184,7 @@ void IRAM_ATTR DCF77_ISR() {
     bufCounter++;
   }
   lastInt = millis();
-  digitalWrite(dcfStatusLedPin, readDcf);
+  digitalWrite(dcfStatusLedPin, sensorValue == pulseStart);
 }
 void evaluateSequence(){
   byte dcf77Year = (currentBuf>>50) & 0xFF;    // year = bit 50-57
@@ -226,7 +215,6 @@ void evaluateSequence(){
 unsigned int rawByteToInt(byte raw){
   return ((raw>>4)*10 + (raw & 0x0F));
 }
-// uncomment the following lines if you don't use an AVR MCU
 bool parity_even_bit(byte val){
  val ^= val >> 4;
  val ^= val >> 2;
