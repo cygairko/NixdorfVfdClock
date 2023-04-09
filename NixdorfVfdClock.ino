@@ -130,7 +130,7 @@ void loopMosfet() {
   // check if the pushbutton is pressed.
   // if it is, the buttonState is HIGH
   if (buttonState == HIGH || settingTime == 1) {
-    Serial.println("Button clicked, disabling display until DCF signal available.");
+    
     // turn LED on
     settingTime = 1;
     digitalWrite(mostfetPin, LOW);
@@ -172,8 +172,12 @@ void IRAM_ATTR DCF77_ISR() {
   // Output for debugging
   // Serial.print(!digitalRead(interruptPin));
 
-  int readDcf = digitalRead(dcfInterruptPin);
-  if (invertedSignal) readDcf = !readDcf;
+  int readDcf;
+  if (invertedSignal) {
+    readDcf = !digitalRead(dcfInterruptPin);
+  } else {
+    readDcf = digitalRead(dcfInterruptPin);
+  }
   
   if(readDcf) {
     if(dur>1500){
