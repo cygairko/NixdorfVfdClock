@@ -64,10 +64,8 @@ void setup () {
 
   configTime(MY_TZ, MY_NTP_SERVER);
 
-  initMosfet();
   initDisplay();
   initRtc();
-  initDcf();
   initWlan();
   
   settimeofday_cb(time_is_set);                  // register callback if time was sent
@@ -78,21 +76,12 @@ void loop() {
 
   // loopTimeToSerialConsole(rtcnow);
   loopUpdateDisplay(rtcnow);
-  loopMosfet();
-  
   
   showTime();
   printRTC();
 
   // One loop every half second
   delay(updateInterval);
-}
-
-void initMosfet() {
-  Serial.print("Init Mosfet ... ");
-  pinMode(buttonPin, INPUT);
-  pinMode(mostfetPin, OUTPUT);
-  Serial.println("OK");
 }
 
 void initDisplay() {
@@ -130,19 +119,6 @@ void initRtc() {
   Serial.println("OK");
 }
 
-void initDcf() {
-  Serial.print("Init DCF ... ");
-  // Attaching the interrupt listener
-  pinMode(dcfInterruptPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(dcfInterruptPin), DCF77_ISR, CHANGE);
-  initDcfLed();
-  Serial.println("OK");
-}
-
-void initDcfLed() {
-  pinMode(dcfStatusLedPin, OUTPUT);
-}
-
 void initWlan() {
   Serial.print("Init Wlan ... ");
 
@@ -166,29 +142,6 @@ void initWlan() {
   Serial.print(WiFi.SSID());
   Serial.print(" ");
   Serial.println(WiFi.localIP());
-}
-
-void loopMosfet() {
-  // read the state of the pushbutton value
-  buttonState = digitalRead(buttonPin);
-  // check if the pushbutton is pressed.
-  if (buttonState == HIGH) {
-    // Recognize button push
-    settingTime = 1;
-    Serial.println("Setting time ... ");
-    
-    vfd.clear();
-    vfd.setCursor(0, 0);
-    vfd.print("Setting time ...");
-
-    delay(1500); // Show message for 1.5 s
-  } else if (settingTime == 1) {
-    // Keep display off while getting the time
-    digitalWrite(mostfetPin, LOW);
-  } else {
-    // Turn button on again.
-    digitalWrite(mostfetPin, HIGH);
-  }
 }
 
 void time_is_set(bool from_sntp) {
@@ -232,75 +185,6 @@ void loopUpdateDisplay(DateTime rtcnow) {
   vfd.setCursor(0, 1);
   vfd.print(rtcnow.toString(timeFormat));
 }
-
-// **************************
-// Code for reading DCF77 signal
-// **************************
-void IRAM_ATTR DCF77_ISR() {
-  // Interrupt handler
-  unsigned int dur = 0;
-  dur = millis() - lastInt;
-  byte sensorValue = digitalRead(dcfInterruptPin);
-  
-  if(sensorValue == pulseStart) {
-    if(dur>1500){
-      if(bufCounter==59){
-        evaluateSequence();
-      }
-      bufCounter = 0;
-      currentBuf = 0;
-    }
-  }
-  else{
-    if(dur>150){
-      currentBuf |= ((unsigned long long)1<<bufCounter);
-    }
-    bufCounter++;
-  }
-  lastInt = millis();
-  digitalWrite(dcfStatusLedPin, sensorValue == pulseStart);
-}
-void evaluateSequence(){
-  byte dcf77Year = (currentBuf>>50) & 0xFF;    // year = bit 50-57
-  byte dcf77Month = (currentBuf>>45) & 0x1F;       // month = bit 45-49
-  byte dcf77DayOfWeek = (currentBuf>>42) & 0x07;   // day of the week = bit 42-44
-  byte dcf77DayOfMonth = (currentBuf>>36) & 0x3F;  // day of the month = bit 36-41
-  byte dcf77Hour = (currentBuf>>29) & 0x3F;       // hour = bit 29-34
-  byte dcf77Minute = (currentBuf>>21) & 0x7F;     // minute = 21-27 
-  bool parityBitMinute = (currentBuf>>28) & 1;
-  bool parityBitHour = (currentBuf>>35) & 1;
-  bool parityBitDate = (currentBuf>>58) & 1;
-  if((parity_even_bit(dcf77Minute)) == parityBitMinute){
-    if((parity_even_bit(dcf77Hour)) == parityBitHour){
-      if(((parity_even_bit(dcf77DayOfMonth) + parity_even_bit(dcf77DayOfWeek) 
-           + parity_even_bit(dcf77Month) + parity_even_bit(dcf77Year))%2) == parityBitDate){
-        rtc.adjust(DateTime(rawByteToInt(dcf77Year) + 2000, rawByteToInt(dcf77Month), 
-            rawByteToInt(dcf77DayOfMonth), rawByteToInt(dcf77Hour), rawByteToInt(dcf77Minute), 0));
-        
-        Serial.println("**********************");
-        Serial.println("Time adjusted from Dcf");
-        Serial.println("**********************");
-        Serial.println();
-        settingTime = 0;
-       }
-    }
-  }
-}
-unsigned int rawByteToInt(byte raw){
-  return ((raw>>4)*10 + (raw & 0x0F));
-}
-bool parity_even_bit(byte val){
- val ^= val >> 4;
- val ^= val >> 2;
- val ^= val >> 1;
- val &= 0x01;
- return val;
-}
-// **************************
-// Code for reading DCF77 signal
-// **************************
-
-
 
 void printRTC()
 {
