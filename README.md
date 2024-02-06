@@ -17,3 +17,6 @@ Building a desktop clock using a Nixdorf BA63 customer display
 
 ## Layout
 ![Fritzing layout.](fritzing_sketch.png)
+
+# Notes
+Wifi: https://randomnerdtutorials.com/esp32-wifimulti/
