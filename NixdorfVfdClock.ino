@@ -68,7 +68,7 @@ void setup () {
   initDisplay();
   initRtc();
   initDcf();
-  initWlan();
+  setupWlan();
   
   settimeofday_cb(time_is_set);                  // register callback if time was sent
 }
@@ -79,7 +79,6 @@ void loop() {
   // loopTimeToSerialConsole(rtcnow);
   loopUpdateDisplay(rtcnow);
   loopMosfet();
-  
   
   showTime();
   printRTC();
@@ -130,6 +129,50 @@ void initRtc() {
   Serial.println("OK");
 }
 
+void setupWlan() {
+  Serial.print("Setup Wlan ... ");
+
+  // Don't save WiFi configuration in flash - optional
+  WiFi.persistent(false);
+  // Set WiFi to station mode
+  WiFi.mode(WIFI_STA);
+
+  // Register multi WiFi networks
+  wifiMulti.addAP("WifiNumber1", "PasswordNumber1");
+  wifiMulti.addAP("WifiNumber2", "PasswordNumber2");
+  wifiMulti.addAP("WifiNumber3", "PasswordNumber3");
+  // More is possible
+
+  connectWlan();
+
+
+  /*
+  while (wifiMulti.run(connectTimeoutMs) != WL_CONNECTED) {
+    delay(200);
+    Serial.print ( "." );
+  }
+ 
+  Serial.print("WiFi connected: ");
+  Serial.print(WiFi.SSID());
+  Serial.print(" ");
+  Serial.println(WiFi.localIP());
+  */
+}
+
+bool connectWlan() {
+  if(wifiMulti.run(connectTimeoutMs) == WL_CONNECTED) {
+    Serial.print("WiFi connected: ");
+    Serial.print(WiFi.SSID());
+    Serial.print(" ");
+    Serial.println(WiFi.localIP());
+    showVfdText(WiFi.SSID(), 1500);
+    return true;
+  } else {
+    Serial.println("WiFi not connected!");
+    return false;
+  }
+}
+
 void initDcf() {
   Serial.print("Init DCF ... ");
   // Attaching the interrupt listener
@@ -174,14 +217,15 @@ void loopMosfet() {
   // check if the pushbutton is pressed.
   if (buttonState == HIGH) {
     // Recognize button push
-    settingTime = 1;
-    Serial.println("Setting time ... ");
-    
-    vfd.clear();
-    vfd.setCursor(0, 0);
-    vfd.print("Setting time ...");
 
-    delay(1500); // Show message for 1.5 s
+    if (connectWlan()) {
+      settingTime = 0;
+      showVfdText(WiFi.SSID(), 1500);
+    } else {
+      settingTime = 1;
+      showVfdText("Waiting for DCF ...", 1500);
+    }
+    
   } else if (settingTime == 1) {
     // Keep display off while getting the time
     digitalWrite(mostfetPin, LOW);
@@ -300,7 +344,16 @@ bool parity_even_bit(byte val){
 // Code for reading DCF77 signal
 // **************************
 
-
+void showVfdText(String text, int textTimeout) {
+  vfd.clear();
+  vfd.home();
+  vfd.setCursor(0, 0);
+  vfd.print(text);
+  Serial.println(text);
+  delay(textTimeout);
+  vfd.clear();
+  vfd.home();
+}
 
 void printRTC()
 {
